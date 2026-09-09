@@ -8,7 +8,11 @@ import {
   saveStudents,
 } from "@/lib/classroom-data";
 
-export default function StudentsManager() {
+type StudentsManagerProps = {
+  courseId?: string;
+};
+
+export default function StudentsManager({ courseId }: StudentsManagerProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [newName, setNewName] = useState("");
   const [bulkNames, setBulkNames] = useState("");
@@ -22,18 +26,18 @@ export default function StudentsManager() {
         return;
       }
 
-      setStudents(loadStudents());
+      setStudents(loadStudents(courseId));
       setHasLoaded(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [courseId]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveStudents(students);
+      saveStudents(students, courseId);
     }
   }, [hasLoaded, students]);
 

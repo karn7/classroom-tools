@@ -21,7 +21,11 @@ const emptyQuestion = {
   points: 1,
 };
 
-export default function QuestionTool() {
+type QuestionToolProps = {
+  courseId?: string;
+};
+
+export default function QuestionTool({ courseId }: QuestionToolProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<Map<string, number>>(new Map());
@@ -47,26 +51,26 @@ export default function QuestionTool() {
         return;
       }
 
-      setQuestions(loadQuestions());
-      setStudents(loadStudents());
-      setScores(loadScoreMap());
+      setQuestions(loadQuestions(courseId));
+      setStudents(loadStudents(courseId));
+      setScores(loadScoreMap(courseId));
       setHasLoaded(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [courseId]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveQuestions(questions);
+      saveQuestions(questions, courseId);
     }
   }, [hasLoaded, questions]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveScoreMap(scores);
+      saveScoreMap(scores, courseId);
     }
   }, [hasLoaded, scores]);
 

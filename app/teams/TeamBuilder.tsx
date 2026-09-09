@@ -64,7 +64,11 @@ function buildEmptyTeams(teamCount: number, previousTeams: Team[] = []) {
   }));
 }
 
-export default function TeamBuilder() {
+type TeamBuilderProps = {
+  courseId?: string;
+};
+
+export default function TeamBuilder({ courseId }: TeamBuilderProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [teamCount, setTeamCount] = useState(2);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -82,9 +86,9 @@ export default function TeamBuilder() {
         return;
       }
 
-      const loadedStudents = loadStudents();
+      const loadedStudents = loadStudents(courseId);
       setStudents(loadedStudents);
-      setScores(loadScoreMap());
+      setScores(loadScoreMap(courseId));
       setTeams(buildTeams(loadedStudents, teamCount));
       setUnassignedStudents([]);
       setHasLoaded(true);
@@ -93,11 +97,11 @@ export default function TeamBuilder() {
     return () => {
       cancelled = true;
     };
-  }, [teamCount]);
+  }, [courseId, teamCount]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveScoreMap(scores);
+      saveScoreMap(scores, courseId);
     }
   }, [hasLoaded, scores]);
 

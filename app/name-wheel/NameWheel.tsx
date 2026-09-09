@@ -24,13 +24,17 @@ const WHEEL_COLORS = [
   "#64748b",
 ];
 
-function loadWheelStudents() {
+function loadWheelStudents(courseId?: string) {
   if (typeof window === "undefined") {
     return [];
   }
 
-  const students = loadStudents();
+  const students = loadStudents(courseId);
   if (students.length > 0) {
+    return students;
+  }
+
+  if (courseId) {
     return students;
   }
 
@@ -49,12 +53,15 @@ function loadWheelStudents() {
   }
 }
 
-function loadRemovedIds() {
+function loadRemovedIds(courseId?: string) {
   if (typeof window === "undefined") {
     return new Set<string>();
   }
 
-  const saved = window.localStorage.getItem(REMOVED_IDS_STORAGE_KEY);
+  const storageKey = courseId
+    ? `classroom-tools:courses:${courseId}:name-wheel:removed-ids`
+    : REMOVED_IDS_STORAGE_KEY;
+  const saved = window.localStorage.getItem(storageKey);
   if (!saved) {
     return new Set<string>();
   }
@@ -67,7 +74,7 @@ function loadRemovedIds() {
 
     return new Set(parsed.filter((id) => typeof id === "string"));
   } catch {
-    window.localStorage.removeItem(REMOVED_IDS_STORAGE_KEY);
+    window.localStorage.removeItem(storageKey);
     return new Set<string>();
   }
 }
@@ -90,7 +97,11 @@ function getDisplayName(name: string) {
   return name.length > 14 ? `${name.slice(0, 13)}...` : name;
 }
 
-export default function NameWheel() {
+type NameWheelProps = {
+  courseId?: string;
+};
+
+export default function NameWheel({ courseId }: NameWheelProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
@@ -109,26 +120,29 @@ export default function NameWheel() {
         return;
       }
 
-      setStudents(loadWheelStudents());
-      setRemovedIds(loadRemovedIds());
+      setStudents(loadWheelStudents(courseId));
+      setRemovedIds(loadRemovedIds(courseId));
       setHasLoaded(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [courseId]);
 
   useEffect(() => {
     if (hasLoaded && typeof window !== "undefined") {
-      saveStudents(students);
+      saveStudents(students, courseId);
     }
   }, [hasLoaded, students]);
 
   useEffect(() => {
     if (hasLoaded && typeof window !== "undefined") {
+      const storageKey = courseId
+        ? `classroom-tools:courses:${courseId}:name-wheel:removed-ids`
+        : REMOVED_IDS_STORAGE_KEY;
       window.localStorage.setItem(
-        REMOVED_IDS_STORAGE_KEY,
+        storageKey,
         JSON.stringify(Array.from(removedIds)),
       );
     }

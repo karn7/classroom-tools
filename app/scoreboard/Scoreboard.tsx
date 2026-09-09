@@ -9,7 +9,11 @@ import {
   saveScoreMap,
 } from "@/lib/classroom-data";
 
-export default function Scoreboard() {
+type ScoreboardProps = {
+  courseId?: string;
+};
+
+export default function Scoreboard({ courseId }: ScoreboardProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<Map<string, number>>(new Map());
   const [pendingScores, setPendingScores] = useState<Map<string, number>>(
@@ -27,19 +31,19 @@ export default function Scoreboard() {
         return;
       }
 
-      setStudents(loadStudents());
-      setScores(loadScoreMap());
+      setStudents(loadStudents(courseId));
+      setScores(loadScoreMap(courseId));
       setHasLoaded(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [courseId]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveScoreMap(scores);
+      saveScoreMap(scores, courseId);
     }
   }, [hasLoaded, scores]);
 
