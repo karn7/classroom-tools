@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { pushLocalClassroomDataToMongo } from "@/lib/classroom-data";
 
 type BackupData = {
   exportedAt: string;
@@ -122,6 +123,16 @@ export default function BackupTool() {
     event.target.value = "";
   }
 
+  async function uploadLocalDataToMongo() {
+    try {
+      setMessage("กำลังส่งข้อมูลขึ้น MongoDB...");
+      await pushLocalClassroomDataToMongo();
+      setMessage("ส่งข้อมูล local ขึ้น MongoDB แล้ว");
+    } catch {
+      setMessage("ส่งข้อมูลขึ้น MongoDB ไม่สำเร็จ");
+    }
+  }
+
   return (
     <div className="stage-viewport bg-[#f6f7fb] text-slate-950">
       <main className="stage-16-9 grid gap-4 p-4 lg:grid-cols-[380px_minmax(0,1fr)]">
@@ -166,6 +177,13 @@ export default function BackupTool() {
               className="min-h-12 rounded-2xl bg-slate-100 px-4 text-base font-black text-slate-700 transition hover:bg-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-200"
             >
               อ่านข้อมูลล่าสุด
+            </button>
+            <button
+              type="button"
+              onClick={uploadLocalDataToMongo}
+              className="min-h-12 rounded-2xl bg-sky-600 px-4 text-base font-black text-white transition hover:bg-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-200"
+            >
+              ส่งข้อมูลขึ้น MongoDB
             </button>
             <Link
               href="/"

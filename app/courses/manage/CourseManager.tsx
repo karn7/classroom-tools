@@ -12,9 +12,9 @@ import {
   APP_BACKGROUND_IMAGE,
   Course,
   createCourseId,
-  deleteCourseData,
-  loadCourses,
-  saveCourses,
+  deleteCourseDataEverywhere,
+  loadCoursesData,
+  saveCoursesData,
 } from "@/lib/classroom-data";
 
 type CourseDraft = {
@@ -90,12 +90,12 @@ export default function CourseManager() {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      setCourses(loadCourses());
+      setCourses(await loadCoursesData());
       setHasLoaded(true);
     });
 
@@ -106,7 +106,7 @@ export default function CourseManager() {
 
   useEffect(() => {
     if (hasLoaded) {
-      saveCourses(courses);
+      saveCoursesData(courses);
     }
   }, [courses, hasLoaded]);
 
@@ -217,7 +217,7 @@ export default function CourseManager() {
       return;
     }
 
-    deleteCourseData(course.id);
+    deleteCourseDataEverywhere(course.id);
     window.sessionStorage.removeItem(`classroom-tools:course-unlocked:${course.id}`);
     setCourses((current) => current.filter((item) => item.id !== course.id));
     if (editingId === course.id) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
-import { Course, findCourse } from "@/lib/classroom-data";
+import { Course, loadCoursesData } from "@/lib/classroom-data";
 
 type CourseAccessProps = {
   children: ReactNode;
@@ -29,10 +29,22 @@ export default function CourseAccess({ children, courseId }: CourseAccessProps) 
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    const nextCourse = findCourse(courseId);
-    setCourse(nextCourse);
-    setIsUnlocked(isCourseUnlocked(courseId));
-    setHasLoaded(true);
+    let cancelled = false;
+
+    queueMicrotask(async () => {
+      const courses = await loadCoursesData();
+      if (cancelled) {
+        return;
+      }
+
+      setCourse(courses.find((item) => item.id === courseId) ?? null);
+      setIsUnlocked(isCourseUnlocked(courseId));
+      setHasLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
 
   function submitPassword() {

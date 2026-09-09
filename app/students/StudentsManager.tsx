@@ -4,8 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   Student,
   createId,
-  loadStudents,
-  saveStudents,
+  loadStudentsData,
+  saveStudentsData,
 } from "@/lib/classroom-data";
 
 type StudentsManagerProps = {
@@ -21,12 +21,12 @@ export default function StudentsManager({ courseId }: StudentsManagerProps) {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      setStudents(loadStudents(courseId));
+      setStudents(await loadStudentsData(courseId));
       setHasLoaded(true);
     });
 
@@ -37,7 +37,7 @@ export default function StudentsManager({ courseId }: StudentsManagerProps) {
 
   useEffect(() => {
     if (hasLoaded) {
-      saveStudents(students, courseId);
+      saveStudentsData(students, courseId);
     }
   }, [hasLoaded, students]);
 

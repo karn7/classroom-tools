@@ -193,9 +193,15 @@ export function findCourse(courseId: string) {
 }
 
 export function deleteCourseData(courseId: string) {
-  window.localStorage.removeItem(getScopedStorageKey(STUDENTS_STORAGE_KEY, courseId));
-  window.localStorage.removeItem(getScopedStorageKey(SCORES_STORAGE_KEY, courseId));
-  window.localStorage.removeItem(getScopedStorageKey(QUESTIONS_STORAGE_KEY, courseId));
+  window.localStorage.removeItem(
+    getScopedStorageKey(STUDENTS_STORAGE_KEY, courseId),
+  );
+  window.localStorage.removeItem(
+    getScopedStorageKey(SCORES_STORAGE_KEY, courseId),
+  );
+  window.localStorage.removeItem(
+    getScopedStorageKey(QUESTIONS_STORAGE_KEY, courseId),
+  );
 }
 
 export function normalizeStudents(value: unknown): Student[] {
@@ -276,7 +282,7 @@ export function saveScoreMap(scoreMap: Map<string, number>, courseId?: string) {
   );
 }
 
-function normalizeScoreMap(value: unknown) {
+export function normalizeScoreMap(value: unknown) {
   if (!Array.isArray(value)) {
     return new Map<string, number>();
   }
@@ -296,7 +302,252 @@ function normalizeScoreMap(value: unknown) {
   );
 }
 
+export function scoreMapToEntries(scoreMap: Map<string, number>) {
+  return Array.from(scoreMap, ([studentId, score]) => ({
+    studentId,
+    score,
+  }));
+}
+
 function serializeScoreMap(scoreMap: Map<string, number>) {
+  return JSON.stringify(scoreMapToEntries(scoreMap));
+}
+
+export async function loadCoursesData() {
+  const localCourses = loadCourses();
+
+  try {
+    const response = await fetch("/api/courses", { cache: "no-store" });
+    if (!response.ok) {
+      return localCourses;
+    }
+
+    const remoteCourses = normalizeCourses((await response.json()).courses);
+    const shouldMigrateLocal =
+      localCourses.length > remoteCourses.length ||
+      localCourses.some(
+        (localCourse) =>
+          !remoteCourses.some((course) => course.id === localCourse.id),
+      );
+
+    if (shouldMigrateLocal) {
+      await saveCoursesData(localCourses);
+      return localCourses;
+    }
+
+    saveCourses(remoteCourses);
+    return remoteCourses;
+  } catch {
+    return localCourses;
+  }
+}
+
+export async function saveCoursesData(courses: Course[]) {
+  const normalizedCourses = normalizeCourses(courses);
+  saveCourses(normalizedCourses);
+
+  try {
+    await fetch("/api/courses", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courses: normalizedCourses }),
+    });
+  } catch {
+    return;
+  }
+}
+
+export async function deleteCourseDataEverywhere(courseId: string) {
+  deleteCourseData(courseId);
+
+  try {
+    await fetch(`/api/courses/${encodeURIComponent(courseId)}`, {
+      method: "DELETE",
+    });
+  } catch {
+    return;
+  }
+}
+
+export async function loadStudentsData(courseId?: string) {
+  const localStudents = loadStudents(courseId);
+  if (!courseId) {
+    return localStudents;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/courses/${encodeURIComponent(courseId)}/students`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return localStudents;
+    }
+
+    const remoteStudents = normalizeStudents((await response.json()).students);
+    if (remoteStudents.length === 0 && localStudents.length > 0) {
+      await saveStudentsData(localStudents, courseId);
+      return localStudents;
+    }
+
+    saveStudents(remoteStudents, courseId);
+    return remoteStudents;
+  } catch {
+    return localStudents;
+  }
+}
+
+export async function saveStudentsData(students: Student[], courseId?: string) {
+  const normalizedStudents = normalizeStudents(students);
+  saveStudents(normalizedStudents, courseId);
+  if (!courseId) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/courses/${encodeURIComponent(courseId)}/students`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ students: normalizedStudents }),
+    });
+  } catch {
+    return;
+  }
+}
+
+export async function loadScoreMapData(courseId?: string) {
+  const localScoreMap = loadScoreMap(courseId);
+  if (!courseId) {
+    return localScoreMap;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/courses/${encodeURIComponent(courseId)}/scores`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return localScoreMap;
+    }
+
+    const remoteScoreMap = normalizeScoreMap((await response.json()).scores);
+    if (remoteScoreMap.size === 0 && localScoreMap.size > 0) {
+      await saveScoreMapData(localScoreMap, courseId);
+      return localScoreMap;
+    }
+
+    saveScoreMap(remoteScoreMap, courseId);
+    return remoteScoreMap;
+  } catch {
+    return localScoreMap;
+  }
+}
+
+export async function saveScoreMapData(
+  scoreMap: Map<string, number>,
+  courseId?: string,
+) {
+  saveScoreMap(scoreMap, courseId);
+  if (!courseId) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/courses/${encodeURIComponent(courseId)}/scores`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scores: scoreMapToEntries(scoreMap) }),
+    });
+  } catch {
+    return;
+  }
+}
+
+export async function loadQuestionsData(courseId?: string) {
+  const localQuestions = loadQuestions(courseId);
+  if (!courseId) {
+    return localQuestions;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/courses/${encodeURIComponent(courseId)}/questions`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return localQuestions;
+    }
+
+    const remoteQuestions = normalizeQuestions((await response.json()).questions);
+    if (remoteQuestions.length === 0 && localQuestions.length > 0) {
+      await saveQuestionsData(localQuestions, courseId);
+      return localQuestions;
+    }
+
+    saveQuestions(remoteQuestions, courseId);
+    return remoteQuestions;
+  } catch {
+    return localQuestions;
+  }
+}
+
+export async function saveQuestionsData(
+  questions: Question[],
+  courseId?: string,
+) {
+  const normalizedQuestions = normalizeQuestions(questions);
+  saveQuestions(normalizedQuestions, courseId);
+  if (!courseId) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/courses/${encodeURIComponent(courseId)}/questions`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questions: normalizedQuestions }),
+    });
+  } catch {
+    return;
+  }
+}
+
+export function serializeClassroomBackup() {
+  const values: Record<string, string> = {};
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith("classroom-tools:")) {
+      const value = window.localStorage.getItem(key);
+      if (value !== null) {
+        values[key] = value;
+      }
+    }
+  }
+
+  return values;
+}
+
+export async function pushLocalClassroomDataToMongo() {
+  const courses = loadCourses();
+  await saveCoursesData(courses);
+
+  await Promise.all(
+    courses.map(async (course) => {
+      await Promise.all([
+        saveStudentsData(loadStudents(course.id), course.id),
+        saveScoreMapData(loadScoreMap(course.id), course.id),
+        saveQuestionsData(loadQuestions(course.id), course.id),
+      ]);
+    }),
+  );
+}
+
+export function entriesToScoreMap(scores: ScoreEntry[]) {
+  return normalizeScoreMap(scores);
+}
+
+export function stringifyScoreEntries(scoreMap: Map<string, number>) {
   const scores = Array.from(scoreMap, ([studentId, score]) => ({
     studentId,
     score,

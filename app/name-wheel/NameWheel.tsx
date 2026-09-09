@@ -4,9 +4,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Student,
   createId,
-  loadStudents,
+  loadStudentsData,
   normalizeStudents,
   saveStudents,
+  saveStudentsData,
 } from "@/lib/classroom-data";
 
 const LEGACY_STORAGE_KEY = "classroom-tools:name-wheel";
@@ -24,12 +25,12 @@ const WHEEL_COLORS = [
   "#64748b",
 ];
 
-function loadWheelStudents(courseId?: string) {
+async function loadWheelStudents(courseId?: string) {
   if (typeof window === "undefined") {
     return [];
   }
 
-  const students = loadStudents(courseId);
+  const students = await loadStudentsData(courseId);
   if (students.length > 0) {
     return students;
   }
@@ -115,12 +116,12 @@ export default function NameWheel({ courseId }: NameWheelProps) {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      setStudents(loadWheelStudents(courseId));
+      setStudents(await loadWheelStudents(courseId));
       setRemovedIds(loadRemovedIds(courseId));
       setHasLoaded(true);
     });
@@ -132,7 +133,7 @@ export default function NameWheel({ courseId }: NameWheelProps) {
 
   useEffect(() => {
     if (hasLoaded && typeof window !== "undefined") {
-      saveStudents(students, courseId);
+      saveStudentsData(students, courseId);
     }
   }, [hasLoaded, students]);
 

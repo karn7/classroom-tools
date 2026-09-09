@@ -6,11 +6,11 @@ import {
   Question,
   Student,
   createId,
-  loadQuestions,
-  loadScoreMap,
-  loadStudents,
-  saveQuestions,
-  saveScoreMap,
+  loadQuestionsData,
+  loadScoreMapData,
+  loadStudentsData,
+  saveQuestionsData,
+  saveScoreMapData,
 } from "@/lib/classroom-data";
 
 type RandomMode = "question" | "question-student";
@@ -46,14 +46,21 @@ export default function QuestionTool({ courseId }: QuestionToolProps) {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      setQuestions(loadQuestions(courseId));
-      setStudents(loadStudents(courseId));
-      setScores(loadScoreMap(courseId));
+      const [loadedQuestions, loadedStudents, loadedScores] =
+        await Promise.all([
+          loadQuestionsData(courseId),
+          loadStudentsData(courseId),
+          loadScoreMapData(courseId),
+        ]);
+
+      setQuestions(loadedQuestions);
+      setStudents(loadedStudents);
+      setScores(loadedScores);
       setHasLoaded(true);
     });
 
@@ -64,13 +71,13 @@ export default function QuestionTool({ courseId }: QuestionToolProps) {
 
   useEffect(() => {
     if (hasLoaded) {
-      saveQuestions(questions, courseId);
+      saveQuestionsData(questions, courseId);
     }
   }, [hasLoaded, questions]);
 
   useEffect(() => {
     if (hasLoaded) {
-      saveScoreMap(scores, courseId);
+      saveScoreMapData(scores, courseId);
     }
   }, [hasLoaded, scores]);
 

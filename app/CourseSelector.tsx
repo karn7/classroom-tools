@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Course, loadCourses } from "@/lib/classroom-data";
+import { Course, loadCoursesData } from "@/lib/classroom-data";
 import { unlockCourseSession } from "@/components/CourseAccess";
 
 export default function CourseSelector() {
@@ -14,12 +14,12 @@ export default function CourseSelector() {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      setCourses(loadCourses());
+      setCourses(await loadCoursesData());
     });
 
     return () => {

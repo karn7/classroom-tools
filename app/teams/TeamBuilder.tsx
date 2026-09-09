@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Student,
-  loadScoreMap,
-  loadStudents,
-  saveScoreMap,
+  loadScoreMapData,
+  loadStudentsData,
+  saveScoreMapData,
 } from "@/lib/classroom-data";
 
 type Team = {
@@ -81,14 +81,17 @@ export default function TeamBuilder({ courseId }: TeamBuilderProps) {
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) {
         return;
       }
 
-      const loadedStudents = loadStudents(courseId);
+      const [loadedStudents, loadedScores] = await Promise.all([
+        loadStudentsData(courseId),
+        loadScoreMapData(courseId),
+      ]);
       setStudents(loadedStudents);
-      setScores(loadScoreMap(courseId));
+      setScores(loadedScores);
       setTeams(buildTeams(loadedStudents, teamCount));
       setUnassignedStudents([]);
       setHasLoaded(true);
@@ -101,7 +104,7 @@ export default function TeamBuilder({ courseId }: TeamBuilderProps) {
 
   useEffect(() => {
     if (hasLoaded) {
-      saveScoreMap(scores, courseId);
+      saveScoreMapData(scores, courseId);
     }
   }, [hasLoaded, scores]);
 

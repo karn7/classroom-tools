@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import CourseDashboard from "@/components/CourseDashboard";
 import { isCourseUnlocked, unlockCourseSession } from "@/components/CourseAccess";
-import { Course, findCourse } from "@/lib/classroom-data";
+import { Course, loadCoursesData } from "@/lib/classroom-data";
 
 type CourseDashboardLoaderProps = {
   courseId: string;
@@ -20,9 +20,22 @@ export default function CourseDashboardLoader({
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    setCourse(findCourse(courseId));
-    setIsUnlocked(isCourseUnlocked(courseId));
-    setHasLoaded(true);
+    let cancelled = false;
+
+    queueMicrotask(async () => {
+      const courses = await loadCoursesData();
+      if (cancelled) {
+        return;
+      }
+
+      setCourse(courses.find((item) => item.id === courseId) ?? null);
+      setIsUnlocked(isCourseUnlocked(courseId));
+      setHasLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
 
   function submitPassword() {
