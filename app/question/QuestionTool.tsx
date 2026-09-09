@@ -7,8 +7,10 @@ import {
   Student,
   createId,
   loadQuestions,
+  loadScoreMap,
   loadStudents,
   saveQuestions,
+  saveScoreMap,
 } from "@/lib/classroom-data";
 
 type RandomMode = "question" | "question-student";
@@ -22,6 +24,10 @@ const emptyQuestion = {
 export default function QuestionTool() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [scores, setScores] = useState<Map<string, number>>(new Map());
+  const [pendingScores, setPendingScores] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [draft, setDraft] = useState(emptyQuestion);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(
     null,
@@ -29,6 +35,8 @@ export default function QuestionTool() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [randomMode, setRandomMode] = useState<RandomMode>("question-student");
   const [showAnswer, setShowAnswer] = useState(false);
+  const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
+  const [isScoreboardOpen, setIsScoreboardOpen] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
@@ -41,6 +49,7 @@ export default function QuestionTool() {
 
       setQuestions(loadQuestions());
       setStudents(loadStudents());
+      setScores(loadScoreMap());
       setHasLoaded(true);
     });
 
@@ -55,6 +64,12 @@ export default function QuestionTool() {
     }
   }, [hasLoaded, questions]);
 
+  useEffect(() => {
+    if (hasLoaded) {
+      saveScoreMap(scores);
+    }
+  }, [hasLoaded, scores]);
+
   const canRandomStudent = students.length > 0;
 
   const currentModeLabel = useMemo(() => {
@@ -64,6 +79,22 @@ export default function QuestionTool() {
 
     return "สุ่มเฉพาะคำถาม";
   }, [randomMode]);
+
+  const alphabeticalRows = useMemo(
+    () =>
+      [...students].sort((first, second) =>
+        first.name.localeCompare(second.name, "th"),
+      ),
+    [students],
+  );
+  const totalPendingScore = useMemo(
+    () =>
+      Array.from(pendingScores.values()).reduce(
+        (total, score) => total + score,
+        0,
+      ),
+    [pendingScores],
+  );
 
   function addQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,101 +166,175 @@ export default function QuestionTool() {
     randomize(mode);
   }
 
+  function addPendingScore(
+    studentId: string,
+    points = selectedQuestion?.points ?? 0,
+  ) {
+    const amount = Math.max(0, Math.round(points));
+    if (amount === 0) {
+      return;
+    }
+
+    setPendingScores((current) => {
+      const next = new Map(current);
+      next.set(studentId, (next.get(studentId) ?? 0) + amount);
+      return next;
+    });
+  }
+
+  function changePendingScore(studentId: string, amount: number) {
+    setPendingScores((current) => {
+      const next = new Map(current);
+      const nextScore = (next.get(studentId) ?? 0) + amount;
+      if (nextScore === 0) {
+        next.delete(studentId);
+      } else {
+        next.set(studentId, nextScore);
+      }
+      return next;
+    });
+  }
+
+  function savePendingScores() {
+    setScores((current) => {
+      const next = new Map(current);
+      pendingScores.forEach((score, studentId) => {
+        next.set(studentId, (next.get(studentId) ?? 0) + score);
+      });
+      return next;
+    });
+    setPendingScores(new Map());
+  }
+
   return (
-    <section className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-      <div className="flex min-h-0 flex-col gap-4">
-        <div className="shrink-0 rounded-[1.5rem] bg-slate-950 p-4 text-white shadow-sm ring-1 ring-slate-800 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-lg font-bold text-sky-200">โหมดปัจจุบัน</p>
-              <h2 className="mt-1 text-3xl font-black sm:text-4xl">
-                {currentModeLabel}
-              </h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px]">
-              <button
-                type="button"
-                onClick={() => setRandomMode("question")}
-                className={`min-h-14 rounded-2xl px-4 text-lg font-black transition focus:outline-none focus:ring-4 focus:ring-sky-300 ${
-                  randomMode === "question"
-                    ? "bg-sky-500 text-white"
-                    : "bg-white/12 text-white hover:bg-white/20"
-                }`}
-              >
-                เฉพาะคำถาม
-              </button>
-              <button
-                type="button"
-                onClick={() => setRandomMode("question-student")}
-                className={`min-h-14 rounded-2xl px-4 text-lg font-black transition focus:outline-none focus:ring-4 focus:ring-sky-300 ${
-                  randomMode === "question-student"
-                    ? "bg-sky-500 text-white"
-                    : "bg-white/12 text-white hover:bg-white/20"
-                }`}
-              >
-                คำถาม + ชื่อ
-              </button>
-              <button
-                type="button"
-                onClick={() => randomize()}
-                disabled={questions.length === 0}
-                className="min-h-14 rounded-2xl bg-amber-400 px-4 text-lg font-black text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
-              >
-                สุ่มถัดไป
-              </button>
-            </div>
+    <section className="relative h-full min-h-0 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsQuestionBankOpen((current) => !current)}
+        aria-label={isQuestionBankOpen ? "ซ่อนคลังคำถาม" : "แสดงคลังคำถาม"}
+        aria-expanded={isQuestionBankOpen}
+        aria-controls="question-bank"
+        className="absolute right-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-2xl font-black text-white shadow-xl transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-sky-200"
+      >
+        <span
+          className={`block transition-transform duration-500 ${
+            isQuestionBankOpen ? "rotate-45" : "rotate-0"
+          }`}
+          aria-hidden="true"
+        >
+        +
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setIsScoreboardOpen((current) => !current)}
+        aria-label={isScoreboardOpen ? "ซ่อนตารางคะแนน" : "แสดงตารางคะแนน"}
+        aria-expanded={isScoreboardOpen}
+        aria-controls="question-scoreboard"
+        className="absolute left-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-2xl font-black text-slate-950 shadow-xl transition duration-300 hover:-translate-y-0.5 hover:bg-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-200"
+      >
+        <span aria-hidden="true">🏆</span>
+      </button>
+
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        <div className="flex shrink-0 flex-col gap-3 rounded-[1.5rem] bg-slate-950 p-3 text-white shadow-sm ring-1 ring-slate-800 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2 pr-14 lg:pr-0">
+            <span className="rounded-full bg-white/12 px-3 py-2 text-sm font-black text-sky-100">
+              {currentModeLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setRandomMode("question")}
+              className={`min-h-10 rounded-xl px-3 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-sky-300 ${
+                randomMode === "question"
+                  ? "bg-sky-500 text-white"
+                  : "bg-white/12 text-white hover:bg-white/20"
+              }`}
+            >
+              เฉพาะคำถาม
+            </button>
+            <button
+              type="button"
+              onClick={() => setRandomMode("question-student")}
+              className={`min-h-10 rounded-xl px-3 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-sky-300 ${
+                randomMode === "question-student"
+                  ? "bg-sky-500 text-white"
+                  : "bg-white/12 text-white hover:bg-white/20"
+              }`}
+            >
+              คำถาม + ชื่อ
+            </button>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+            <button
+              type="button"
+              onClick={() => randomize()}
+              disabled={questions.length === 0}
+              className="min-h-12 rounded-2xl bg-amber-400 px-4 text-lg font-black text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+            >
+              สุ่ม
+            </button>
             <button
               type="button"
               onClick={() => setModeAndRandomize("question")}
               disabled={questions.length === 0}
-                className="min-h-14 rounded-2xl bg-white px-5 text-xl font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              className="min-h-12 rounded-2xl bg-white px-4 text-base font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-sky-50 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
             >
-              สุ่มเฉพาะคำถาม
+              สุ่มคำถาม
             </button>
             <button
               type="button"
               onClick={() => setModeAndRandomize("question-student")}
               disabled={questions.length === 0 || !canRandomStudent}
-                className="min-h-14 rounded-2xl bg-sky-500 px-5 text-xl font-black text-white transition hover:-translate-y-0.5 hover:bg-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              className="min-h-12 rounded-2xl bg-sky-500 px-4 text-base font-black text-white transition hover:-translate-y-0.5 hover:bg-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
             >
-              สุ่มคำถาม + สุ่มชื่อ
+              สุ่มชื่อด้วย
             </button>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col justify-between rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        <div className="flex min-h-0 flex-1 flex-col justify-between rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-7">
           <div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex w-fit items-center rounded-2xl bg-sky-50 px-5 py-3 text-2xl font-black text-sky-800">
+              <div className="inline-flex w-fit items-center rounded-2xl bg-sky-50 px-5 py-3 text-2xl font-black text-sky-800 sm:text-3xl">
                 {selectedQuestion
                   ? `${selectedQuestion.points} คะแนน`
                   : "พร้อมเริ่ม"}
               </div>
               {selectedStudent ? (
-                <div className="rounded-2xl bg-emerald-50 px-5 py-3 text-2xl font-black text-emerald-800">
-                  ผู้ตอบ: {selectedStudent.name}
+                <div className="flex flex-col gap-3 rounded-2xl bg-emerald-50 px-5 py-3 text-emerald-800 sm:flex-row sm:items-center">
+                  <p className="break-words text-2xl font-black sm:text-3xl">
+                    ผู้ตอบ: {selectedStudent.name}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => addPendingScore(selectedStudent.id)}
+                    disabled={!selectedQuestion || selectedQuestion.points === 0}
+                    className="min-h-11 rounded-xl bg-emerald-600 px-4 text-base font-black text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    +{selectedQuestion?.points ?? 0} คะแนน
+                  </button>
                 </div>
               ) : null}
             </div>
 
-            <div className="mt-6 flex min-h-36 items-center justify-center text-center lg:min-h-48">
-              <h2 className="break-words text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
+            <div className="mt-6 flex min-h-52 items-center justify-center text-center lg:min-h-72">
+              <h2 className="break-words text-5xl font-black leading-tight text-slate-950 sm:text-7xl lg:text-8xl">
                 {selectedQuestion?.prompt || "เพิ่มคำถาม แล้วกดสุ่มเพื่อเริ่ม"}
               </h2>
             </div>
 
             <div
-              className={`mt-5 rounded-[1.5rem] border px-5 py-4 text-center transition ${
+              className={`mt-5 rounded-[1.5rem] border px-5 py-5 text-center transition ${
                 showAnswer && selectedQuestion
                   ? "border-emerald-200 bg-emerald-50 opacity-100"
                   : "border-slate-200 bg-slate-50 opacity-70"
               }`}
             >
               <p className="text-lg font-bold text-slate-500">เฉลย</p>
-              <p className="mt-2 break-words text-2xl font-black leading-tight text-slate-950 sm:text-4xl">
+              <p className="mt-2 break-words text-3xl font-black leading-tight text-slate-950 sm:text-5xl">
                 {showAnswer && selectedQuestion
                   ? selectedQuestion.answer || "ไม่มีเฉลยที่บันทึกไว้"
                   : "ซ่อนไว้"}
@@ -242,7 +347,7 @@ export default function QuestionTool() {
               type="button"
               onClick={() => setShowAnswer((current) => !current)}
               disabled={!selectedQuestion}
-              className="min-h-16 rounded-2xl bg-emerald-600 px-6 text-2xl font-black text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="min-h-14 rounded-2xl bg-emerald-600 px-6 text-xl font-black text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {showAnswer ? "ซ่อนเฉลย" : "แสดงเฉลย"}
             </button>
@@ -250,7 +355,7 @@ export default function QuestionTool() {
               type="button"
               onClick={() => randomize()}
               disabled={questions.length === 0}
-              className="min-h-16 rounded-2xl bg-slate-950 px-6 text-2xl font-black text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="min-h-14 rounded-2xl bg-slate-950 px-6 text-xl font-black text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               สุ่มคำถามถัดไป
             </button>
@@ -258,7 +363,14 @@ export default function QuestionTool() {
         </div>
       </div>
 
-      <aside className="flex min-h-0 flex-col rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
+      <aside
+        id="question-bank"
+        className={`absolute bottom-0 right-0 top-0 z-20 flex min-h-0 w-full max-w-[430px] origin-right flex-col rounded-l-[1.5rem] bg-white p-4 shadow-2xl ring-1 ring-slate-200 transition-all duration-500 ease-out sm:p-5 ${
+          isQuestionBankOpen
+            ? "translate-x-0 rotate-0 opacity-100"
+            : "pointer-events-none translate-x-[108%] rotate-3 opacity-0"
+        }`}
+      >
         <form onSubmit={addQuestion} className="flex shrink-0 flex-col gap-2">
           <h2 className="text-3xl font-black">คลังคำถาม</h2>
           <textarea
@@ -399,6 +511,95 @@ export default function QuestionTool() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      </aside>
+
+      <aside
+        id="question-scoreboard"
+        className={`absolute bottom-0 left-0 top-0 z-20 flex min-h-0 w-full max-w-[430px] origin-left flex-col rounded-r-[1.5rem] bg-white p-4 shadow-2xl ring-1 ring-slate-200 transition-all duration-500 ease-out sm:p-5 ${
+          isScoreboardOpen
+            ? "translate-x-0 rotate-0 opacity-100"
+            : "pointer-events-none -translate-x-[108%] -rotate-3 opacity-0"
+        }`}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-yellow-700">คะแนนรอบนี้</p>
+            <h2 className="mt-1 text-3xl font-black">เพิ่มคะแนน</h2>
+            <p className="mt-1 text-lg font-bold text-slate-500">
+              คะแนนที่จะบันทึก {totalPendingScore}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsScoreboardOpen(false)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-950 text-2xl font-black text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300"
+            aria-label="ปิดตารางคะแนน"
+          >
+            ×
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={savePendingScores}
+          disabled={pendingScores.size === 0}
+          className="mt-4 min-h-12 shrink-0 rounded-2xl bg-emerald-600 px-5 text-lg font-black text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          บันทึกคะแนน
+        </button>
+
+        <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+          {alphabeticalRows.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-300 px-5 py-10 text-center">
+              <p className="text-2xl font-black text-slate-700">
+                ยังไม่มีรายชื่อ
+              </p>
+              <Link
+                href="/students"
+                className="mt-4 inline-flex min-h-12 items-center justify-center rounded-2xl bg-slate-950 px-5 text-lg font-black text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300"
+              >
+                ไปเพิ่มรายชื่อ
+              </Link>
+            </div>
+          ) : (
+            alphabeticalRows.map((student) => {
+              const pendingScore = pendingScores.get(student.id) ?? 0;
+
+              return (
+                <div
+                  key={student.id}
+                  className="grid grid-cols-[minmax(0,1fr)_72px_112px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3"
+                >
+                  <p className="truncate text-xl font-black text-slate-950">
+                    {student.name}
+                  </p>
+                  <p className="text-right text-xl font-black text-emerald-700">
+                    +{pendingScore}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => changePendingScore(student.id, -1)}
+                      className="min-h-10 rounded-xl bg-slate-200 text-xl font-black text-slate-950 transition hover:bg-slate-300 focus:outline-none focus:ring-4 focus:ring-slate-200"
+                      aria-label={`ลดคะแนนที่จะเพิ่มให้ ${student.name}`}
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addPendingScore(student.id)}
+                      disabled={!selectedQuestion || selectedQuestion.points === 0}
+                      className="min-h-10 rounded-xl bg-emerald-600 text-base font-black text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      aria-label={`เพิ่มคะแนนที่จะเพิ่มให้ ${student.name}`}
+                    >
+                      +{selectedQuestion?.points ?? 0}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </aside>

@@ -83,7 +83,11 @@ function buildWheelBackground(count: number) {
     return `${color} ${index * slice}deg ${(index + 1) * slice}deg`;
   });
 
-  return `conic-gradient(${stops.join(", ")})`;
+  return `conic-gradient(from 90deg, ${stops.join(", ")})`;
+}
+
+function getDisplayName(name: string) {
+  return name.length > 14 ? `${name.slice(0, 13)}...` : name;
 }
 
 export default function NameWheel() {
@@ -92,7 +96,9 @@ export default function NameWheel() {
   const [newName, setNewName] = useState("");
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [winner, setWinner] = useState<Student | null>(null);
+  const [winnerPulseKey, setWinnerPulseKey] = useState(0);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
@@ -134,6 +140,7 @@ export default function NameWheel() {
   );
   const removedStudents = students.length - activeStudents.length;
   const wheelBackground = buildWheelBackground(activeStudents.length);
+  const labelSlice = activeStudents.length > 0 ? 360 / activeStudents.length : 0;
 
   function addName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,7 +201,11 @@ export default function NameWheel() {
     const degreesPerSlice = 360 / activeStudents.length;
     const targetAngle = winnerIndex * degreesPerSlice + degreesPerSlice / 2;
     const extraTurns = 5 + Math.floor(Math.random() * 3);
-    const nextRotation = rotation + extraTurns * 360 + (360 - targetAngle);
+    const currentRotation = ((rotation % 360) + 360) % 360;
+    const desiredRotation = (360 - targetAngle) % 360;
+    const travelToTarget =
+      (desiredRotation - currentRotation + 360) % 360;
+    const nextRotation = rotation + extraTurns * 360 + travelToTarget;
 
     setWinner(null);
     setIsSpinning(true);
@@ -202,36 +213,81 @@ export default function NameWheel() {
 
     window.setTimeout(() => {
       setWinner(activeStudents[winnerIndex]);
+      setWinnerPulseKey((current) => current + 1);
       setIsSpinning(false);
     }, 3800);
   }
 
   return (
-    <section className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-      <div className="min-h-0 rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
+    <section className="relative h-full min-h-0 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsRosterOpen((current) => !current)}
+        aria-label={isRosterOpen ? "ซ่อนรายชื่อ" : "ขยายรายชื่อ"}
+        aria-expanded={isRosterOpen}
+        aria-controls="name-wheel-roster"
+        className="absolute right-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-2xl font-black text-white shadow-xl transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-rose-200"
+      >
+        <span
+          className={`block transition-transform duration-500 ${
+            isRosterOpen ? "rotate-45" : "rotate-0"
+          }`}
+          aria-hidden="true"
+        >
+          +
+        </span>
+      </button>
+
+      <div className="h-full min-h-0 rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
         <div className="flex h-full min-h-0 flex-col items-center gap-4">
           <div className="relative flex aspect-square min-h-0 flex-1 items-center justify-center">
             <div className="absolute -right-1 top-1/2 z-10 h-0 w-0 -translate-y-1/2 border-y-[22px] border-r-[40px] border-y-transparent border-r-slate-950 drop-shadow" />
             <div
-              className="relative h-full w-full rounded-full border-[14px] border-white shadow-2xl ring-1 ring-slate-200 transition-transform duration-[3800ms] ease-out"
+              className="relative h-full w-full overflow-hidden rounded-full border-[14px] border-white shadow-2xl ring-1 ring-slate-200 transition-transform duration-[3800ms] ease-out"
               style={{
                 background: wheelBackground,
                 transform: `rotate(${rotation}deg)`,
               }}
             >
-              <div className="absolute inset-[12%] rounded-full bg-white/95 shadow-inner" />
-              <div className="absolute inset-[33%] rounded-full bg-slate-950 shadow-lg" />
+              {activeStudents.map((student, index) => {
+                const angle = index * labelSlice + labelSlice / 2;
+                const color = WHEEL_COLORS[index % WHEEL_COLORS.length];
+
+                return (
+                  <div
+                    key={student.id}
+                    className="absolute left-1/2 top-1/2 z-10 flex w-[45%] origin-left items-center justify-end pr-3"
+                    style={{
+                      transform: `translateY(-50%) rotate(${angle}deg)`,
+                    }}
+                  >
+                    <span
+                      className="max-w-full truncate rounded-full bg-white/92 px-3 py-1 text-sm font-black text-slate-950 shadow-md ring-4 sm:text-base lg:text-lg"
+                      style={{
+                        borderColor: color,
+                        boxShadow: `0 8px 18px rgba(15, 23, 42, 0.2), inset 0 0 0 999px ${color}22`,
+                      }}
+                    >
+                      {getDisplayName(student.name)}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="absolute inset-[37%] z-20 rounded-full bg-slate-950 shadow-lg" />
             </div>
-            <div className="pointer-events-none absolute inset-[22%] flex items-center justify-center text-center">
+            <button
+              type="button"
+              onClick={spinWheel}
+              disabled={isSpinning || activeStudents.length === 0}
+              className="absolute inset-[37%] z-20 flex items-center justify-center rounded-full text-center transition hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-rose-200 disabled:cursor-not-allowed"
+              aria-label="หมุนวงล้อ"
+            >
               <div>
-                <p className="text-xl font-bold text-slate-500 sm:text-2xl">
-                  รายชื่อในวงล้อ
-                </p>
-                <p className="mt-2 text-6xl font-black text-slate-950 sm:text-8xl">
+                <p className="text-5xl font-black text-white sm:text-7xl">
                   {activeStudents.length}
                 </p>
               </div>
-            </div>
+            </button>
           </div>
 
           <div className="grid w-full shrink-0 gap-3 sm:grid-cols-3">
@@ -265,14 +321,26 @@ export default function NameWheel() {
             <p className="text-base font-semibold text-rose-200 sm:text-xl">
               ผลการสุ่ม
             </p>
-            <p className="mt-1 break-words text-3xl font-black leading-tight sm:text-5xl">
+            <p
+              key={`${winner?.id || "ready"}-${winnerPulseKey}`}
+              className={`mt-1 break-words text-3xl font-black leading-tight sm:text-5xl ${
+                winner ? "winner-pop" : ""
+              }`}
+            >
               {winner?.name || "พร้อมสุ่มชื่อ"}
             </p>
           </div>
         </div>
       </div>
 
-      <aside className="flex min-h-0 flex-col rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
+      <aside
+        id="name-wheel-roster"
+        className={`absolute bottom-0 right-0 top-0 z-20 flex min-h-0 w-full max-w-[430px] origin-right flex-col rounded-l-[1.5rem] bg-white p-4 shadow-2xl ring-1 ring-slate-200 transition-all duration-500 ease-out sm:p-5 ${
+          isRosterOpen
+            ? "translate-x-0 rotate-0 opacity-100"
+            : "pointer-events-none translate-x-[108%] rotate-3 opacity-0"
+        }`}
+      >
         <form onSubmit={addName} className="flex shrink-0 flex-col gap-3 sm:flex-row">
           <input
             value={newName}
